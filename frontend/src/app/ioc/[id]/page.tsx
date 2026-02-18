@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, RefreshCw, Download, Globe, Link, Hash, ExternalLink, Mail, ShieldAlert, Tag } from 'lucide-react';
-import { getIOC, triggerEnrichment } from '@/lib/api';
+import { ArrowLeft, RefreshCw, Download, Globe, Link, Hash, ExternalLink, Mail, ShieldAlert, Tag, Sparkles, Loader2 } from 'lucide-react';
+import { getIOC, triggerEnrichment, analyzeIOCWithAI } from '@/lib/api';
 import ScoreBadge from '@/components/ioc/ScoreBadge';
 import { cn, formatDate, formatTimestamp, getScoreCategory, getScoreColor } from '@/lib/utils';
-import type { IOCDetail } from '@/lib/types';
+import type { IOCDetail, AIAnalysis } from '@/lib/types';
 
-const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+const typeIcons: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   ip: Globe,
   domain: Link,
   hash: Hash,
@@ -25,6 +25,9 @@ export default function IOCDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [enriching, setEnriching] = useState(false);
   const [activeTab, setActiveTab] = useState('enrichment');
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -52,6 +55,20 @@ export default function IOCDetailPage() {
       // ignore
     } finally {
       setEnriching(false);
+    }
+  };
+
+  const handleAIAnalyze = async () => {
+    if (!ioc) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const result = await analyzeIOCWithAI(ioc.id);
+      setAiAnalysis(result);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'AI analysis failed');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -155,18 +172,22 @@ export default function IOCDetailPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-sentinel-border">
-        {['enrichment', 'sources', 'relationships', 'raw'].map((tab) => (
+        {['enrichment', 'sources', 'relationships', 'raw', 'ai-analysis'].map((tab) => (
           <button
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              setActiveTab(tab);
+              if (tab === 'ai-analysis' && !aiAnalysis && !aiLoading) handleAIAnalyze();
+            }}
             className={cn(
-              'px-4 py-2 text-xs font-mono uppercase tracking-wider transition-colors border-b-2 -mb-px',
+              'px-4 py-2 text-xs font-mono uppercase tracking-wider transition-colors border-b-2 -mb-px flex items-center gap-1.5',
               activeTab === tab
                 ? 'text-sentinel-accent border-sentinel-accent'
                 : 'text-sentinel-text-muted border-transparent hover:text-sentinel-text-secondary'
             )}
           >
-            {tab}
+            {tab === 'ai-analysis' && <Sparkles className="w-3 h-3" />}
+            {tab === 'ai-analysis' ? 'AI Analysis' : tab}
           </button>
         ))}
       </div>
@@ -261,6 +282,90 @@ export default function IOCDetailPage() {
             <pre className="text-[11px] font-mono text-sentinel-text-secondary bg-sentinel-bg-primary rounded p-4 overflow-x-auto max-h-[500px]">
               {JSON.stringify(ioc, null, 2)}
             </pre>
+          </div>
+        )}
+
+        {activeTab === 'ai-analysis' && (
+          <div className="space-y-4">
+            {aiLoading ? (
+              <div className="sentinel-card p-8 text-center">
+                <Loader2 className="w-6 h-6 text-sentinel-accent animate-spin mx-auto mb-3" />
+                <p className="text-sm font-mono text-sentinel-text-muted">Generating AI analysis...</p>
+                <p className="text-[10px] font-mono text-sentinel-text-muted mt-1">This may take a few seconds</p>
+              </div>
+            ) : aiError ? (
+              <div className="sentinel-card p-8 text-center">
+                <p className="text-sentinel-danger text-sm font-mono">{aiError}</p>
+                <button onClick={handleAIAnalyze} className="mt-3 text-xs font-mono text-sentinel-accent hover:underline">
+                  Retry analysis
+                </button>
+              </div>
+            ) : aiAnalysis ? (
+              <>
+                {/* Summary & Risk */}
+                <div className="sentinel-card p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-sentinel-text-muted flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-sentinel-accent" />
+                      AI Summary
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        'px-2 py-0.5 text-[10px] font-mono font-semibold uppercase rounded',
+                        aiAnalysis.risk_level === 'critical' && 'bg-red-500/10 text-red-400 border border-red-500/20',
+                        aiAnalysis.risk_level === 'high' && 'bg-orange-500/10 text-orange-400 border border-orange-500/20',
+                        aiAnalysis.risk_level === 'medium' && 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20',
+                        aiAnalysis.risk_level === 'low' && 'bg-green-500/10 text-green-400 border border-green-500/20',
+                      )}>
+                        {aiAnalysis.risk_level} risk
+                      </span>
+                      <button
+                        onClick={handleAIAnalyze}
+                        className="text-[10px] font-mono text-sentinel-accent hover:underline"
+                      >
+                        Re-analyze
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs font-mono text-sentinel-text-primary leading-relaxed">{aiAnalysis.summary}</p>
+                </div>
+
+                {/* Detailed Analysis */}
+                <div className="sentinel-card p-5">
+                  <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-sentinel-text-muted mb-3">
+                    Detailed Analysis
+                  </h3>
+                  <div className="text-xs font-mono text-sentinel-text-secondary leading-relaxed whitespace-pre-wrap">
+                    {aiAnalysis.analysis}
+                  </div>
+                </div>
+
+                {/* Recommendations */}
+                {aiAnalysis.recommendations.length > 0 && (
+                  <div className="sentinel-card p-5">
+                    <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-sentinel-text-muted mb-3">
+                      Recommendations
+                    </h3>
+                    <ul className="space-y-2">
+                      {aiAnalysis.recommendations.map((rec, i) => (
+                        <li key={i} className="flex items-start gap-2 text-xs font-mono text-sentinel-text-secondary">
+                          <span className="text-sentinel-accent mt-0.5 flex-shrink-0">{'>'}</span>
+                          {rec}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="sentinel-card p-8 text-center">
+                <Sparkles className="w-6 h-6 text-sentinel-text-muted mx-auto mb-3" />
+                <p className="text-sm font-mono text-sentinel-text-muted">No AI analysis yet</p>
+                <button onClick={handleAIAnalyze} className="mt-3 text-xs font-mono text-sentinel-accent hover:underline">
+                  Generate AI analysis
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

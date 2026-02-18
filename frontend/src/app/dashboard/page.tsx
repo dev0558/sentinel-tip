@@ -10,7 +10,11 @@ import GeoThreatMap from '@/components/dashboard/GeoThreatMap';
 import { RefreshCw } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { stats, timeline, topThreats, feedHealth, geoData, loading, error, refresh } = useDashboardData();
+  const {
+    stats, timeline, topThreats, feedHealth, geoData,
+    statsLoading, timelineLoading, topThreatsLoading, feedHealthLoading, geoLoading,
+    error, refresh,
+  } = useDashboardData();
 
   return (
     <div className="space-y-6">
@@ -42,29 +46,29 @@ export default function DashboardPage() {
       )}
 
       {/* Stats Cards Row */}
-      <StatsCards stats={stats} loading={loading} />
+      <StatsCards stats={stats} loading={statsLoading} />
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Gauge + Geo */}
         <div className="space-y-6">
-          <ThreatGauge score={stats?.avg_threat_score ?? 0} />
-          <GeoThreatMap data={geoData} loading={loading} />
+          <ThreatGauge score={stats?.avg_threat_score ?? 0} loading={statsLoading} />
+          <GeoThreatMap data={geoData} loading={geoLoading} />
         </div>
 
         {/* Center Column: Timeline */}
         <div className="lg:col-span-1">
-          <IOCTimeline entries={timeline} loading={loading} />
+          <IOCTimeline entries={timeline} loading={timelineLoading} />
         </div>
 
         {/* Right Column: Feed Health */}
         <div>
-          <FeedHealth feeds={feedHealth} loading={loading} />
+          <FeedHealth feeds={feedHealth} loading={feedHealthLoading} />
         </div>
       </div>
 
       {/* Top Threats Table */}
-      <TopThreats threats={topThreats} loading={loading} />
+      <TopThreats threats={topThreats} loading={topThreatsLoading} />
     </div>
   );
 }

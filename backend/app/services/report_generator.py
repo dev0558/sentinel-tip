@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ioc import IOC
@@ -13,7 +13,7 @@ from app.models.report import Report
 from app.services.scoring_engine import get_score_category
 
 
-async def generate_daily_brief(session: AsyncSession) -> Dict[str, Any]:
+async def generate_daily_brief(session: AsyncSession) -> Report:
     """Generate automated daily threat intelligence brief."""
     now = datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
@@ -96,7 +96,7 @@ async def generate_daily_brief(session: AsyncSession) -> Dict[str, Any]:
     session.add(report)
     await session.flush()
 
-    return content
+    return report
 
 
 async def generate_custom_report(

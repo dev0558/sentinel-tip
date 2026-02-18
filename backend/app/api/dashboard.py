@@ -18,61 +18,59 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
     """Get aggregate dashboard statistics."""
     now = datetime.now(timezone.utc)
     yesterday = now - timedelta(days=1)
-    week_ago = now - timedelta(days=7)
 
-    total = (await db.execute(select(func.count(IOC.id)))).scalar() or 0
-    total_yesterday = (await db.execute(
-        select(func.count(IOC.id)).where(IOC.created_at < yesterday)
-    )).scalar() or 0
+    # Single query for all IOC aggregates using case() for conditional counts
+    ioc_agg = (await db.execute(
+        select(
+            func.count(IOC.id).label("total"),
+            func.sum(case((IOC.created_at >= yesterday, 1), else_=0)).label("new_24h"),
+            func.sum(case((IOC.created_at < yesterday, 1), else_=0)).label("total_yesterday"),
+            func.sum(case((IOC.threat_score >= 76, 1), else_=0)).label("critical"),
+            func.coalesce(func.avg(IOC.threat_score), 0).label("avg_score"),
+        )
+    )).one()
 
-    new_24h = (await db.execute(
-        select(func.count(IOC.id)).where(IOC.created_at >= yesterday)
-    )).scalar() or 0
+    total = ioc_agg.total or 0
+    new_24h = int(ioc_agg.new_24h or 0)
+    total_yesterday = int(ioc_agg.total_yesterday or 0)
+    critical = int(ioc_agg.critical or 0)
+    avg_score = float(ioc_agg.avg_score or 0)
 
-    critical = (await db.execute(
-        select(func.count(IOC.id)).where(IOC.threat_score >= 76)
-    )).scalar() or 0
+    # Single query for feed counts using case()
+    feed_agg = (await db.execute(
+        select(
+            func.count(FeedSource.id).label("total_feeds"),
+            func.sum(case((FeedSource.is_enabled == True, 1), else_=0)).label("active_feeds"),
+        )
+    )).one()
 
-    avg_score = (await db.execute(
-        select(func.avg(IOC.threat_score))
-    )).scalar() or 0
+    # 7-day trend using date truncation - single query
+    trend_start = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
+    day_col = cast(func.date_trunc('day', IOC.created_at), IOC.created_at.type).label("day")
+    trend_result = await db.execute(
+        select(day_col, func.count(IOC.id).label("cnt"))
+        .where(IOC.created_at >= trend_start)
+        .group_by(day_col)
+        .order_by(day_col)
+    )
+    trend_rows = {row.day.strftime("%Y-%m-%d"): row.cnt for row in trend_result}
 
-    active_feeds = (await db.execute(
-        select(func.count(FeedSource.id)).where(FeedSource.is_enabled == True)
-    )).scalar() or 0
-
-    total_feeds = (await db.execute(
-        select(func.count(FeedSource.id))
-    )).scalar() or 0
-
-    # 7-day trend data
     trends = []
     for i in range(7):
         day = now - timedelta(days=6 - i)
-        day_start = day.replace(hour=0, minute=0, second=0, microsecond=0)
-        day_end = day_start + timedelta(days=1)
-        day_count = (await db.execute(
-            select(func.count(IOC.id)).where(
-                IOC.created_at >= day_start,
-                IOC.created_at < day_end,
-            )
-        )).scalar() or 0
-        trends.append({
-            "date": day_start.strftime("%Y-%m-%d"),
-            "count": day_count,
-        })
+        day_key = day.strftime("%Y-%m-%d")
+        trends.append({"date": day_key, "count": trend_rows.get(day_key, 0)})
 
-    delta = new_24h
-    delta_pct = round((delta / max(total_yesterday, 1)) * 100, 1)
+    delta_pct = round((new_24h / max(total_yesterday, 1)) * 100, 1)
 
     return {
         "total_iocs": total,
         "new_24h": new_24h,
         "delta_pct": delta_pct,
         "critical_threats": critical,
-        "avg_threat_score": round(float(avg_score), 1),
-        "active_feeds": active_feeds,
-        "total_feeds": total_feeds,
+        "avg_threat_score": round(avg_score, 1),
+        "active_feeds": int(feed_agg.active_feeds or 0),
+        "total_feeds": feed_agg.total_feeds or 0,
         "trends": trends,
     }
 
@@ -164,6 +162,48 @@ async def get_top_threats(
         }
         for ioc in iocs
     ]
+
+
+@router.get("/notifications")
+async def get_notifications(
+    limit: int = Query(20, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get recent threat notifications (high-score IOCs from last 48h)."""
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=48)
+
+    result = await db.execute(
+        select(IOC)
+        .where(IOC.threat_score >= 60, IOC.created_at >= cutoff)
+        .order_by(desc(IOC.created_at))
+        .limit(limit)
+    )
+    iocs = result.scalars().all()
+
+    notifications = []
+    for ioc in iocs:
+        if ioc.threat_score >= 76:
+            level = "critical"
+            message = f"Critical threat detected: {ioc.type} {ioc.value}"
+        elif ioc.threat_score >= 60:
+            level = "warning"
+            message = f"High-risk indicator: {ioc.type} {ioc.value}"
+        else:
+            level = "info"
+            message = f"New indicator: {ioc.type} {ioc.value}"
+
+        notifications.append({
+            "id": str(ioc.id),
+            "level": level,
+            "message": message,
+            "ioc_type": ioc.type,
+            "ioc_value": ioc.value,
+            "threat_score": ioc.threat_score,
+            "timestamp": ioc.created_at.isoformat() if ioc.created_at else now.isoformat(),
+        })
+
+    return notifications
 
 
 @router.get("/feed-health")

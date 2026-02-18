@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Plus, RefreshCw, Calendar, Download } from 'lucide-react';
-import { getReports, getDailyBrief, generateReport } from '@/lib/api';
+import { FileText, Plus, RefreshCw, Calendar, Download, Sparkles } from 'lucide-react';
+import { getReports, getDailyBrief, generateReport, downloadReport, generateAIReport } from '@/lib/api';
 import { cn, formatDate } from '@/lib/utils';
 import Modal from '@/components/shared/Modal';
 import type { Report } from '@/lib/types';
@@ -14,6 +14,7 @@ export default function ReportsPage() {
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
 
   useEffect(() => {
     loadReports();
@@ -55,6 +56,35 @@ export default function ReportsPage() {
     }
   }
 
+  async function handleAIBrief() {
+    setGeneratingAI(true);
+    try {
+      await generateAIReport();
+      await loadReports();
+    } catch {
+      // ignore
+    } finally {
+      setGeneratingAI(false);
+    }
+  }
+
+  async function handleDownload(report: Report, e?: React.MouseEvent) {
+    if (e) e.stopPropagation();
+    try {
+      const blob = await downloadReport(report.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${report.report_type}_${report.generated_at.slice(0, 10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -65,6 +95,14 @@ export default function ReportsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleAIBrief}
+            disabled={generatingAI}
+            className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50 transition-colors"
+          >
+            <Sparkles className="w-3 h-3" />
+            {generatingAI ? 'GENERATING...' : 'AI BRIEF'}
+          </button>
           <button
             onClick={handleDailyBrief}
             className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded border border-sentinel-border text-sentinel-text-secondary hover:text-sentinel-accent hover:border-sentinel-accent/30 transition-colors"
@@ -111,9 +149,24 @@ export default function ReportsPage() {
                   <FileText className="w-4 h-4 text-sentinel-text-muted" />
                   <h3 className="text-sm font-mono font-semibold text-sentinel-text-primary">{report.title}</h3>
                 </div>
-                <span className="text-[10px] font-mono text-sentinel-text-muted uppercase px-2 py-0.5 rounded bg-sentinel-bg-primary border border-sentinel-border">
-                  {report.report_type}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => handleDownload(report, e)}
+                    className="p-1 rounded text-sentinel-text-muted hover:text-sentinel-accent hover:bg-sentinel-accent/10 transition-colors"
+                    title="Download TXT"
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
+                  {report.report_type === 'ai_insight' && (
+                    <span className="text-[10px] font-mono text-purple-400 uppercase px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" />
+                      AI
+                    </span>
+                  )}
+                  <span className="text-[10px] font-mono text-sentinel-text-muted uppercase px-2 py-0.5 rounded bg-sentinel-bg-primary border border-sentinel-border">
+                    {report.report_type}
+                  </span>
+                </div>
               </div>
               {report.summary && (
                 <p className="text-xs font-mono text-sentinel-text-secondary ml-7">{report.summary}</p>
@@ -164,6 +217,13 @@ export default function ReportsPage() {
             <pre className="text-[11px] font-mono text-sentinel-text-secondary bg-sentinel-bg-primary rounded p-4 overflow-x-auto max-h-96">
               {JSON.stringify(selectedReport.content, null, 2)}
             </pre>
+            <button
+              onClick={() => handleDownload(selectedReport)}
+              className="flex items-center gap-2 px-3 py-1.5 text-xs font-mono rounded bg-sentinel-accent/10 border border-sentinel-accent/30 text-sentinel-accent hover:bg-sentinel-accent/20 transition-colors"
+            >
+              <Download className="w-3 h-3" />
+              DOWNLOAD TXT
+            </button>
           </div>
         )}
       </Modal>

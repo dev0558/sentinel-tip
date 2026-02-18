@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE = '';
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
@@ -11,7 +11,14 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+    let message = `API error: ${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body.detail) message = body.detail;
+    } catch {
+      // use default message
+    }
+    throw new Error(message);
   }
 
   return res.json();
@@ -61,6 +68,15 @@ export const updateFeed = (id: string, data: Partial<import('./types').FeedSourc
     method: 'PUT',
     body: JSON.stringify(data),
   });
+export const createFeed = (data: { name: string; slug: string; description?: string; feed_type: string; url?: string; api_key_env?: string; sync_frequency?: number }) =>
+  fetchAPI<import('./types').FeedSource>('/api/v1/feeds', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+export const deleteFeed = (id: string) =>
+  fetchAPI<unknown>(`/api/v1/feeds/${id}`, { method: 'DELETE' });
+export const getFeedLogs = (id: string) =>
+  fetchAPI<{ feed_id: string; feed_name: string; logs: { timestamp: string | null; status: string; iocs_ingested: number }[] }>(`/api/v1/feeds/${id}/logs`);
 
 // ATT&CK
 export const getAttackMatrix = () => fetchAPI<import('./types').AttackMatrix>('/api/v1/attack/matrix');
@@ -74,7 +90,54 @@ export const generateReport = (data: Record<string, unknown>) =>
     method: 'POST',
     body: JSON.stringify(data),
   });
-export const getDailyBrief = () => fetchAPI<unknown>('/api/v1/reports/daily-brief');
+export const getDailyBrief = () => fetchAPI<import('./types').Report>('/api/v1/reports/daily-brief');
+
+export async function downloadReport(id: string): Promise<Blob> {
+  const url = `${API_BASE}/api/v1/reports/${id}/download`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  }
+  return res.blob();
+}
+
+// Notifications
+export const getNotifications = (limit = 20) => fetchAPI<import('./types').Notification[]>(`/api/v1/dashboard/notifications?limit=${limit}`);
+
+// Users & Auth
+export const registerUser = (data: { username: string; email: string; password: string; full_name?: string; role?: string }) =>
+  fetchAPI<import('./types').TokenResponse>('/api/v1/users/register', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+export const loginUser = (data: { username: string; password: string }) =>
+  fetchAPI<import('./types').TokenResponse>('/api/v1/users/login', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+export const getMe = (token: string) =>
+  fetchAPI<import('./types').UserProfile>('/api/v1/users/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+export const getUsers = () => fetchAPI<{ items: import('./types').UserProfile[]; total: number }>('/api/v1/users');
+export const getUser = (id: string) => fetchAPI<import('./types').UserProfile>(`/api/v1/users/${id}`);
+export const updateUser = (id: string, data: { full_name?: string; email?: string }) =>
+  fetchAPI<import('./types').UserProfile>(`/api/v1/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+
+// AI
+export const analyzeIOCWithAI = (iocId: string) =>
+  fetchAPI<import('./types').AIAnalysis>(`/api/v1/ai/analyze/${iocId}`, { method: 'POST' });
+export const chatWithAI = (messages: import('./types').AIChatMessage[], context?: string) =>
+  fetchAPI<import('./types').AIChatResponse>('/api/v1/ai/chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages, context }),
+  });
+export const generateAIReport = () =>
+  fetchAPI<import('./types').Report>('/api/v1/ai/report', { method: 'POST' });
+export const getAIStatus = () => fetchAPI<import('./types').AIStatus>('/api/v1/ai/status');
 
 // Health
 export const getHealth = () => fetchAPI<{ status: string }>('/api/v1/health');

@@ -169,3 +169,52 @@ export interface SearchFilters {
 }
 
 export type ScoreCategory = 'low' | 'medium' | 'high' | 'critical';
+
+export interface Notification {
+  id: string;
+  level: 'critical' | 'warning' | 'info';
+  message: string;
+  ioc_type: string;
+  ioc_value: string;
+  threat_score: number;
+  timestamp: string;
+}
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  last_login: string | null;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+// AI Types
+export interface AIAnalysis {
+  analysis: string;
+  summary: string;
+  risk_level: 'critical' | 'high' | 'medium' | 'low';
+  recommendations: string[];
+}
+
+export interface AIChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AIChatResponse {
+  response: string;
+}
+
+export interface AIStatus {
+  available: boolean;
+  model: string;
+}

@@ -11,6 +11,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 from app.database import SyncSessionLocal, sync_engine, Base
 from app.models.ioc import IOC
 from app.models.ioc_relationship import IOCRelationship
+from app.models.enrichment import Enrichment
+from app.models.ioc_source import IOCSource
+from app.models.feed import FeedSource
 
 SAMPLE_IPS = [
     "185.220.101.42", "45.155.205.233", "194.26.192.64", "91.219.236.222",
@@ -178,8 +181,109 @@ def generate():
                     session.rollback()
                     session.flush()
 
+        # Create IOC sources linking to seeded feeds
+        feeds = session.query(FeedSource).all()
+        if feeds:
+            for ioc in iocs_created:
+                num_sources = random.randint(1, min(3, len(feeds)))
+                for feed in random.sample(feeds, num_sources):
+                    try:
+                        src = IOCSource(
+                            ioc_id=ioc.id,
+                            feed_id=feed.id,
+                            raw_data={"value": ioc.value, "source": feed.slug},
+                        )
+                        session.add(src)
+                        session.flush()
+                    except Exception:
+                        session.rollback()
+                        session.flush()
+            print(f"  Created IOC source links to {len(feeds)} feeds.")
+
+        # Create enrichments per IOC type
+        for ioc in iocs_created:
+            if ioc.type == "ip":
+                country = ioc.metadata_.get("country_code", "US") if ioc.metadata_ else "US"
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="geoip",
+                    data={
+                        "country": country,
+                        "city": random.choice(["Moscow", "Beijing", "Berlin", "New York", "London", "Tehran", "Kyiv"]),
+                        "latitude": round(random.uniform(-60, 60), 4),
+                        "longitude": round(random.uniform(-180, 180), 4),
+                        "asn": f"AS{random.randint(1000, 65000)}",
+                        "org": random.choice(["Hetzner Online", "OVH SAS", "DigitalOcean", "Amazon AWS", "Rostelecom", "China Telecom"]),
+                    },
+                ))
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="whois",
+                    data={
+                        "registrar": random.choice(["RIPE NCC", "ARIN", "APNIC", "LACNIC"]),
+                        "net_range": f"{ioc.value.rsplit('.', 1)[0]}.0/24",
+                        "org_name": random.choice(["Hetzner Online GmbH", "OVH Hosting", "DigitalOcean LLC", "Amazon.com Inc."]),
+                        "abuse_contact": "abuse@example.com",
+                    },
+                ))
+            elif ioc.type == "domain":
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="whois",
+                    data={
+                        "registrar": random.choice(["Namecheap Inc.", "GoDaddy", "Tucows", "Eranet International"]),
+                        "creation_date": (now - timedelta(days=random.randint(30, 365))).isoformat(),
+                        "expiry_date": (now + timedelta(days=random.randint(30, 365))).isoformat(),
+                        "name_servers": [f"ns{i}.example.com" for i in range(1, 3)],
+                        "registrant_country": random.choice(COUNTRIES),
+                    },
+                ))
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="dns",
+                    data={
+                        "a_records": [f"{random.randint(1,223)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,254)}"],
+                        "mx_records": [f"mail.{ioc.value}"],
+                        "ns_records": [f"ns1.{ioc.value}", f"ns2.{ioc.value}"],
+                        "txt_records": ["v=spf1 -all"],
+                    },
+                ))
+            elif ioc.type == "hash":
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="reputation",
+                    data={
+                        "malware_family": random.choice(["Emotet", "TrickBot", "QakBot", "IcedID", "Cobalt Strike", "AgentTesla"]),
+                        "detections": f"{random.randint(20, 65)}/72",
+                        "first_submission": (now - timedelta(days=random.randint(10, 180))).isoformat(),
+                        "file_type": random.choice(["PE32 executable", "Microsoft Word Document", "PDF document", "ELF executable"]),
+                        "file_size": random.randint(10000, 5000000),
+                    },
+                ))
+            elif ioc.type == "url":
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="dns",
+                    data={
+                        "resolved_ip": f"{random.randint(1,223)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,254)}",
+                        "status_code": random.choice([200, 301, 403, 404]),
+                        "content_type": random.choice(["text/html", "application/octet-stream", "application/javascript"]),
+                    },
+                ))
+                session.add(Enrichment(
+                    ioc_id=ioc.id,
+                    source="reputation",
+                    data={
+                        "threat_label": random.choice(["malware_distribution", "phishing", "exploit_kit", "c2_communication"]),
+                        "blacklisted_by": random.sample(["Google Safe Browsing", "PhishTank", "URLhaus", "Spamhaus"], random.randint(1, 3)),
+                        "risk_score": random.randint(60, 100),
+                    },
+                ))
+        session.flush()
+        print(f"  Created enrichment records for IOCs.")
+
         session.commit()
-        print(f"Generated {len(iocs_created)} sample IOCs with relationships.")
+        print(f"Generated {len(iocs_created)} sample IOCs with relationships, sources, and enrichments.")
 
     except Exception as e:
         session.rollback()

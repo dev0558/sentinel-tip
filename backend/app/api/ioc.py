@@ -139,12 +139,14 @@ async def get_ioc(ioc_id: UUID, db: AsyncSession = Depends(get_db)):
                 "direction": "outgoing" if is_source else "incoming",
             })
 
-    response = IOCDetailResponse.model_validate(ioc)
-    response.enrichments = enrichments
-    response.sources = sources
-    response.relationships = rel_data
+    # Build the response dict from the IOC base fields, then attach
+    # manually-built enrichment/source/relationship dicts
+    ioc_data = IOCResponse.model_validate(ioc).model_dump()
+    ioc_data["enrichments"] = enrichments
+    ioc_data["sources"] = sources
+    ioc_data["relationships"] = rel_data
 
-    return response
+    return IOCDetailResponse.model_validate(ioc_data)
 
 
 @router.post("", response_model=IOCResponse)

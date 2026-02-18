@@ -23,6 +23,11 @@ interface DashboardData {
   feedHealth: FeedHealth[];
   geoData: GeoData[];
   loading: boolean;
+  statsLoading: boolean;
+  timelineLoading: boolean;
+  topThreatsLoading: boolean;
+  feedHealthLoading: boolean;
+  geoLoading: boolean;
   error: string | null;
   refresh: () => void;
 }
@@ -33,31 +38,46 @@ export function useDashboardData(): DashboardData {
   const [topThreats, setTopThreats] = useState<TopThreat[]>([]);
   const [feedHealth, setFeedHealth] = useState<FeedHealth[]>([]);
   const [geoData, setGeoData] = useState<GeoData[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [topThreatsLoading, setTopThreatsLoading] = useState(true);
+  const [feedHealthLoading, setFeedHealthLoading] = useState(true);
+  const [geoLoading, setGeoLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     setError(null);
-    try {
-      const [s, t, th, fh, g] = await Promise.allSettled([
-        getDashboardStats(),
-        getDashboardTimeline(50),
-        getTopThreats(20),
-        getFeedHealth(),
-        getDashboardGeo(),
-      ]);
+    setStatsLoading(true);
+    setTimelineLoading(true);
+    setTopThreatsLoading(true);
+    setFeedHealthLoading(true);
+    setGeoLoading(true);
 
-      if (s.status === 'fulfilled') setStats(s.value);
-      if (t.status === 'fulfilled') setTimeline(t.value);
-      if (th.status === 'fulfilled') setTopThreats(th.value);
-      if (fh.status === 'fulfilled') setFeedHealth(fh.value);
-      if (g.status === 'fulfilled') setGeoData(g.value);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
+    // Fire all requests independently — each updates its own state on arrival
+    getDashboardStats()
+      .then(s => setStats(s))
+      .catch(() => setError('Failed to load stats'))
+      .finally(() => setStatsLoading(false));
+
+    getDashboardTimeline(50)
+      .then(t => setTimeline(t))
+      .catch(() => {})
+      .finally(() => setTimelineLoading(false));
+
+    getTopThreats(20)
+      .then(th => setTopThreats(th))
+      .catch(() => {})
+      .finally(() => setTopThreatsLoading(false));
+
+    getFeedHealth()
+      .then(fh => setFeedHealth(fh))
+      .catch(() => {})
+      .finally(() => setFeedHealthLoading(false));
+
+    getDashboardGeo()
+      .then(g => setGeoData(g))
+      .catch(() => {})
+      .finally(() => setGeoLoading(false));
   }, []);
 
   useEffect(() => {
@@ -66,5 +86,11 @@ export function useDashboardData(): DashboardData {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  return { stats, timeline, topThreats, feedHealth, geoData, loading, error, refresh: fetchData };
+  const loading = statsLoading || timelineLoading || topThreatsLoading || feedHealthLoading || geoLoading;
+
+  return {
+    stats, timeline, topThreats, feedHealth, geoData,
+    loading, statsLoading, timelineLoading, topThreatsLoading, feedHealthLoading, geoLoading,
+    error, refresh: fetchData,
+  };
 }

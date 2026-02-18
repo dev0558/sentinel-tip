@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     SHODAN_API_KEY: Optional[str] = None
     PHISHTANK_API_KEY: Optional[str] = None
 
+    # AI
+    GROQ_API_KEY: str = ""
+
     # App Config
     SECRET_KEY: str = "change-me-in-production"
     ENVIRONMENT: str = "development"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, Filter, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useIOCSearch } from '@/hooks/useIOCSearch';
@@ -11,6 +11,14 @@ import type { SearchFilters } from '@/lib/types';
 const IOC_TYPES = ['all', 'ip', 'domain', 'hash', 'url', 'email', 'cve'];
 
 export default function IOCSearchPage() {
+  return (
+    <Suspense fallback={<div className="text-sentinel-text-muted text-sm font-mono p-8">Loading...</div>}>
+      <IOCSearchContent />
+    </Suspense>
+  );
+}
+
+function IOCSearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data, loading, error, search, filters, setFilters } = useIOCSearch();

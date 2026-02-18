@@ -3,14 +3,18 @@
 from datetime import datetime
 from typing import Optional, List
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class IOCBase(BaseModel):
     type: str = Field(..., description="IOC type: ip, domain, hash, url, email, cve")
     value: str = Field(..., description="IOC value")
     tags: List[str] = Field(default_factory=list)
-    metadata_: Optional[dict] = Field(default=None, alias="metadata")
+    metadata_: Optional[dict] = Field(
+        default=None,
+        validation_alias=AliasChoices("metadata_", "metadata"),
+        serialization_alias="metadata",
+    )
     mitre_techniques: List[str] = Field(default_factory=list)
 
 

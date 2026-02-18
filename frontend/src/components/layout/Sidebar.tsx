@@ -17,6 +17,7 @@ import {
   Activity,
   Database,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/feeds', label: 'Threat Feeds', icon: Rss },
   { href: '/attack-map', label: 'ATT&CK Map', icon: Grid3X3 },
   { href: '/hunting', label: 'Threat Hunting', icon: Crosshair },
+  { href: '/ai-assistant', label: 'AI Assistant', icon: Sparkles },
   { href: '/reports', label: 'Reports', icon: FileText },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

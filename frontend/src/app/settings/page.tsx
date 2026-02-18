@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Save, Shield, Database, Rss, Key } from 'lucide-react';
+import { Settings, Save, Shield, Database, Rss, Key, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
@@ -11,6 +11,7 @@ export default function SettingsPage() {
     { id: 'general', label: 'General', icon: Settings },
     { id: 'feeds', label: 'Feed Config', icon: Rss },
     { id: 'api-keys', label: 'API Keys', icon: Key },
+    { id: 'ai', label: 'AI Config', icon: Sparkles },
     { id: 'database', label: 'Database', icon: Database },
   ];
 
@@ -131,6 +132,53 @@ export default function SettingsPage() {
                       <option>Enabled</option>
                       <option>Disabled</option>
                     </select>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {activeSection === 'ai' && (
+              <>
+                <h2 className="text-sm font-display font-semibold text-sentinel-text-primary">AI Configuration</h2>
+                <p className="text-xs font-mono text-sentinel-text-muted">
+                  SENTINEL uses Groq (Llama 3.3 70B) for AI-powered threat analysis, chat assistance, and report generation.
+                </p>
+                <div className="space-y-3">
+                  <div className="p-3 rounded bg-sentinel-bg-primary border border-sentinel-border">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-mono text-sentinel-text-primary">Groq API Key</p>
+                        <p className="text-[10px] font-mono text-sentinel-text-muted">GROQ_API_KEY</p>
+                      </div>
+                      <span className="text-[10px] font-mono text-sentinel-text-muted px-2 py-0.5 rounded bg-sentinel-bg-tertiary">
+                        ENV VAR
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded bg-sentinel-bg-primary border border-sentinel-border">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-mono text-sentinel-text-primary">Model</p>
+                        <p className="text-[10px] font-mono text-sentinel-text-muted">llama-3.3-70b-versatile</p>
+                      </div>
+                      <span className="text-[10px] font-mono text-green-400 px-2 py-0.5 rounded bg-green-500/10 border border-green-500/20">
+                        FAST
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-3 rounded bg-sentinel-bg-primary border border-sentinel-border">
+                    <p className="text-xs font-mono text-sentinel-text-primary mb-2">AI Features</p>
+                    <ul className="space-y-1.5">
+                      <li className="flex items-center gap-2 text-[10px] font-mono text-sentinel-text-secondary">
+                        <Sparkles className="w-3 h-3 text-sentinel-accent" /> IOC Threat Analysis
+                      </li>
+                      <li className="flex items-center gap-2 text-[10px] font-mono text-sentinel-text-secondary">
+                        <Sparkles className="w-3 h-3 text-sentinel-accent" /> Chat Assistant
+                      </li>
+                      <li className="flex items-center gap-2 text-[10px] font-mono text-sentinel-text-secondary">
+                        <Sparkles className="w-3 h-3 text-sentinel-accent" /> AI Report Generation
+                      </li>
+                    </ul>
                   </div>
                 </div>
               </>
