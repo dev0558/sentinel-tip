@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
     FEED_SYNC_INTERVAL: int = 3600
+    PORT: int = 8000
+    CORS_ORIGINS: str = "*"
 
     # GeoIP
     GEOIP_DB_PATH: str = "/app/data/GeoLite2-City.mmdb"
