@@ -1,8 +1,0 @@
-backend/
-scripts/
-docker-compose.yml
-Dockerfile
-*.md
-.env
-.env.*
-!.env.example
